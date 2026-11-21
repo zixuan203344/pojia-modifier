@@ -18,12 +18,12 @@
     .\tools\set-signing-secrets.ps1 -Pfx "I:\Downloads\代码签名证书制作工具\pojia-signing.pfx"
 
 .EXAMPLE
-    .\tools\set-signing-secrets.ps1 -Pfx D:\certs\pojia.pfx -Password 'xxxx' -Repo Mladery/pojia-modifier
+    .\tools\set-signing-secrets.ps1 -Pfx D:\certs\pojia.pfx -Password 'xxxx' -Repo zixuan203344/pojia-modifier
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Pfx,
     [string]$Password,
-    [string]$Repo = "Mladery/pojia-modifier",
+    [string]$Repo = "zixuan203344/pojia-modifier",
     # 没装 gh 时把 base64 落在这个文件里，默认放仓库根的 .signing-secrets.local/
     [string]$OutDir
 )

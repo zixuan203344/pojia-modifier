@@ -25,7 +25,7 @@
 
 ## 2. 固定路径总表
 
-20 个目标，顺序即执行顺序。`配置目录` 是主落点所在；`环境变量` 是覆盖项，优先级高于默认路径。
+21 个目标，顺序即执行顺序。`配置目录` 是主落点所在；`环境变量` 是覆盖项，优先级高于默认路径。
 
 | # | key | 显示名 | 配置目录（默认） | 环境变量覆盖 |
 |---|---|---|---|---|
@@ -49,6 +49,7 @@
 | 18 | `reasonix` | Reasonix | `%APPDATA%\reasonix`（macOS / Linux 为 `~\.reasonix`） | `REASONIX_HOME` / `REASONIX_STATE_HOME` |
 | 19 | `traecn` | Trae CN | `~\.trae-cn` | `TRAE_CN_HOME` |
 | 20 | `qodercn` | Qoder CN | `~\.qoder-cn` | `QODER_CONFIG_DIR` / `QODER_HOME` |
+| 21 | `ccgui` | CC GUI | `~\.ccgui-next` | `CCGUI_HOME` / `CCGUI_DATA_DIR` |
 
 ### 2.1 每个目标的"标志物"
 
@@ -83,6 +84,7 @@ macOS 上尤其明显：`~/.claude` 里常年只有 `projects/`、`settings.json
 | `reasonix` | `AGENTS.md` / `config.toml` / `sessions\` 任一（`~\.reasonix` 只剩 `locks\`，不算安装） |
 | `traecn` | 目录 `rules\` / `user_rules\` / `settings.json` 任一 |
 | `qodercn` | 目录 `agents\` / `skills\` / `settings.json` 任一 |
+| `ccgui` | `plugins\` / `plugins.json` / `bots\` 任一 |
 | `zcode` | 目录存在，或 `resources\glm\zcode.cjs` 存在 |
 | `wb` / `wbintl` | 见 2.2 |
 | `dsh` | 见 2.3 |
@@ -433,7 +435,7 @@ wb-switch / cc-switch 这类多版本切换器必须记住每个版本的绝对�
 
 ## 10. 验收要点
 
-- 固定表里 20 个路径全部能在没有真实安装的机器上被"枚举"出来（不需要全部命中）。
+- 固定表里 21 个路径全部能在没有真实安装的机器上被"枚举"出来（不需要全部命中）。
 - 显式指定一个不存在的路径 → 有提示，且不会误用其他目录。
 - 手动目录存在时不再触发全盘扫描（可用耗时断言）。
 - 进程表读不到（无权限）时，兜底链其余步骤照常工作。

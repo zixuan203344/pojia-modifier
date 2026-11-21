@@ -71,16 +71,18 @@ def main():
         html = urllib.request.urlopen(url, timeout=60).read().decode("utf-8", "replace")
         if "破甲修改器" not in html:
             return fail("首页内容不对：%r" % html[:200])
+        if '["ccgui", "CC GUI"]' not in html or '["claude",' not in html:
+            return fail("首页目标列表应同时包含 CC GUI 和 Claude Code")
         print("  首页 OK，%d 字节" % len(html))
 
         base, token = url.split("?t=", 1)
-        body = json.dumps({"action": "status", "targets": ["claude"]}).encode("utf-8")
+        body = json.dumps({"action": "status", "targets": ["claude", "ccgui"]}).encode("utf-8")
         req = urllib.request.Request(base + "?t=" + token, data=body,
                                      headers={"Content-Type": "application/json"})
         # 这一步会真的把「自己」当子进程拉起来跑 --status，等于顺带验了
         # build_cmd 的冻结态分支和输出流回页面。
         out = urllib.request.urlopen(req, timeout=300).read().decode("utf-8", "replace")
-        if "claude" not in out.lower():
+        if "claude" not in out.lower() or "ccgui" not in out.lower():
             return fail("动作输出不对：%r" % out[:400])
         print("  动作 OK，%d 字节输出" % len(out))
         print("GUI smoke OK")

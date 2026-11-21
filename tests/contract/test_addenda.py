@@ -3,7 +3,7 @@
 
 分层在 policy_src/addenda.json 的 _layers 里：层文本共享，多个目标叠同一份，
 改一处三个目标同时生效。这里守住四件事：
-  · 20 个目标谁都不能没有特化段（空字符串也算漏）；
+  · 使用政策模板的目标必须有特化段；
   · _layers 只能指向存在的目标与存在的层；
   · kiro 必须是「执行纪律 → Claude → Kiro」这个顺序（第三段开头就说「上面那六条」）；
   · 层文本要真的进 <content_policy>，不能只留在 ADDENDA 里。
@@ -20,6 +20,15 @@ import pojia  # noqa: E402
 def test_every_target_has_addendum():
     for t in pojia.TARGETS:
         assert pojia.target_addendum(t.key).strip(), "%s 没有特化段" % t.key
+
+
+def test_ccgui_addendum_stacks_coding_and_gui_layers():
+    """CC GUI 现在走政策模板：本客户端补充 → 执行纪律 → CC GUI 专用。"""
+    text = pojia.target_addendum("ccgui")
+    marks = ("## 本客户端补充", "执行纪律", "CC GUI 专用")
+    pos = [text.index(m) for m in marks]
+    assert pos == sorted(pos), "CC GUI 特化段顺序不对"
+    assert "CC GUI 专用" in pojia.policy_core(pojia.Ctx().persona, "ccgui")
 
 
 def test_layers_reference_known_targets_and_layers():

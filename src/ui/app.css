@@ -357,6 +357,12 @@
 
   /* ── DSH 选项 ───────────────────────────────────────── */
   .opts{padding:13px 16px 15px; border-bottom:1px solid var(--line)}
+  .row-options{display:flex; align-items:center; gap:4px}
+  .row-options .row{flex:1; min-width:0}
+  .row-options .btn{padding:4px 7px; font-size:12px; flex:none}
+  .ccgui-opts{display:flex; flex-wrap:wrap; gap:14px}
+  .ccgui-opts label{display:flex; align-items:center; gap:5px; cursor:pointer}
+  .ccgui-opts .aside{flex-basis:100%; font-size:12px; color:var(--ink-2)}
   .choice{
     display:flex; gap:11px; padding:11px 13px; cursor:pointer;
     border:1px solid var(--line); border-radius:var(--r-sm); background:var(--surface);

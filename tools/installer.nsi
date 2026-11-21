@@ -61,8 +61,8 @@ ${UnStrRep}
 !define APP_ID        "pojia-modifier"
 !define APP_EXE       "pojia-modifier.exe"
 !define APP_PUBLISHER "Mladery"
-!define APP_URL       "https://github.com/Mladery/pojia-modifier"
-!define APP_KEY       "Software\Mladery\pojia-modifier"
+!define APP_URL       "https://github.com/zixuan203344/pojia-modifier"
+!define APP_KEY       "Software\zixuan203344\pojia-modifier"
 !define UNINST_KEY    "Software\Microsoft\Windows\CurrentVersion\Uninstall\pojia-modifier"
 
 Name "${APP_NAME}"

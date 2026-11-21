@@ -32,7 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 CORE = os.path.join(ROOT, "src", "pojia.py")
 
 OLD = "<!-- pojia-yijiantong cloudmem v8.65 -->\n旧政策：破甲自检成功 | 社区版v8.65 | pojia-ce"
-NEW = "# 新政策\n\n破甲已生效｜版本1.02-mod｜仓库地址：https://github.com/Mladery/pojia-modifier"
+NEW = "# 新政策\n\n破甲已生效｜版本1.02-mod｜仓库地址：https://github.com/zixuan203344/pojia-modifier"
 
 ARCHIVE = """# User Memory Profile
 > Last updated: 2026-11-07T18:35:03

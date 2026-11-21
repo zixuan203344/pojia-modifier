@@ -4,17 +4,17 @@
 > 后缀即渠道：`-alpha` 开发版、`-beta` 测试版、`-mod` 稳定版。
 > 仅限在**自己有权管理的本机设备**上使用，下载前请读 [完整免责声明](docs/disclaimer.md)。
 
-[![CI](https://github.com/Mladery/pojia-modifier/actions/workflows/ci.yml/badge.svg)](https://github.com/Mladery/pojia-modifier/actions/workflows/ci.yml)
-[![Build](https://github.com/Mladery/pojia-modifier/actions/workflows/build.yml/badge.svg)](https://github.com/Mladery/pojia-modifier/actions/workflows/build.yml)
+[![CI](https://github.com/zixuan203344/pojia-modifier/actions/workflows/ci.yml/badge.svg)](https://github.com/zixuan203344/pojia-modifier/actions/workflows/ci.yml)
+[![Build](https://github.com/zixuan203344/pojia-modifier/actions/workflows/build.yml/badge.svg)](https://github.com/zixuan203344/pojia-modifier/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-MIT%20%2B%20Commons%20Clause-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
 
-**一句话：把你电脑上 20 个 AI 客户端「自己改不到的内置提示词」，换成你自己写的那份。**
+**一句话：为你电脑上的 21 个 AI 客户端配置自定义人格。**
 
 | 换完之后 | 说明 |
 |---|---|
 | 用**你的**身份设定 | 而不是软件自带的默认人格 |
-| **20 个客户端一份口径** | 共用一份人格文本，不用各改各的 |
+| **21 个客户端一份口径** | 共用一份人格文本，不用各改各的 |
 | **当场能自证** | 发一句固定口令验证真载入，不靠「感觉好像生效了」 |
 | **随时能还原** | `--revert` 回官方原版，改前备份一直都在 |
 
@@ -61,6 +61,19 @@
 | `reasonix` | Reasonix Studio（`%APPDATA%\reasonix/AGENTS.md`，非 `~/.reasonix`） |
 | `traecn` | Trae CN（`~/.trae-cn/rules/project_rules.md`，与 `trae` 分开认） |
 | `qodercn` | Qoder CN（`~/.qoder-cn/agents/purge/qodercn.md` 带 frontmatter，附 `skills/purge/SKILL.md`） |
+| `ccgui` | CC GUI（插件 + 人格，注入完整作业政策） |
+
+### CC GUI
+
+在网页界面勾选「CC GUI」，或运行 `python src/pojia.py --apply --target ccgui`。可用 `--ccgui-dir` 指定数据根（默认 `~/.ccgui-next`）。勾选「插件」会自动办两件事：把 `manifest.json`、`main.js`、`policy.md` 写进 `plugins/pojia-modifier/`，并在宿主的 `plugins.json` 里登记 `plugins["pojia-modifier"]`（`source=local`、`enabled=true`、权限 `runtime.events.read` + `prompt.contribute.internal`）。CC GUI 1.2.5 或更新版重启或刷新插件页后加载，不需要再从本地目录手动导入。
+
+`plugins.json` 按读-改-写更新：其它插件、`documentStorage` 等键原样保留，只摘掉本插件的 KV 墓碑（撤回时按快照补回）；宿主后来新装的插件在撤回时也不会被抹掉；用户禁用过的 `enabled` 保留，`quarantined` 与 `lastError` 按宿主安装语义重置。写前留 `plugins.json.pojia.bak`。`--status --target ccgui` 同时检查插件文件与注册条目；`--revert --target ccgui` 删除插件目录并从注册表摘掉这一条。旧版导出到 `.pojia/ccgui-bundle/` 的包在下次安装时自动清理。
+
+网页界面中点击 CC GUI 行的「选项」即可选择「插件」和「安装人格」，默认两项都选中。安装后，在 CC GUI「设置 → 智能体 → 自定义」管理「破甲 · 工程助手」，可在新会话中选择它。命令行可用 `--ccgui-components persona` 单独安装人格，或用 `--ccgui-components both` 同时装插件与人格。CC GUI 正在运行时，退出或刷新插件页后再看结果。
+
+`policy_src/` 的完整策略（作业政策本体、执行纪律与 CC GUI 特化段、覆盖层、稳定性条款、自证段）有三处同源落点：插件目录的 `policy.md`、`main.js` 的 `POLICY` 常量、自定义人格的 `SOUL.md`。宿主对**每轮所有插件贡献的累计**设 12 KiB 预算（前端 `collectBeforeTurnContributions`），超预算的整条丢弃；因此 24 KB 的策略切成 3 块，`main.js` 每轮只登记 1 块 `persistence=session` 的 `system-tail` 贡献，宿主记住后在后续轮次自动重放全部块（重放不占该预算）。前三轮逐块登记完，之后每轮完整送达，拼接与原文逐字相同。`--status` 比对三个文件加 `plugins.json` 里的注册条目，任一过期就提示重新运行 `--apply`。
+
+人格由 `bot.json` 的 `managedHash` 托管：策略升级时自动重写到新版，用户手改过的 `SOUL.md` / `AGENTS.md` 保留不动并报错。自证口令统一用政策末尾「自证」段，整条消息为「破甲自检」时只回一行版本串。
 
 ## 快速开始
 
@@ -102,7 +115,7 @@ python src/pojia_gui.py                  # 只起图形界面（本机网页）
 在客户端**新会话**里单独发一句 `破甲自检`（整条消息只有这四个字），只回一行就说明人格真载入了：
 
 ```
-破甲已生效｜版本1.04.3-beta｜仓库地址：https://github.com/Mladery/pojia-modifier
+破甲已生效｜版本1.04.3-beta｜仓库地址：https://github.com/zixuan203344/pojia-modifier
 ```
 
 回复带解释、加戏或拒答 → 人格没生效，先确认目标已**重启**（改的是磁盘文件，运行中的进程不会重读）。
@@ -150,7 +163,7 @@ Linux 上自动往应用菜单里放一项；装的时候问要不要把 `~/.loc
 | macOS Intel | `pojia-modifier-macos-x64-installer.command` | `pojia-modifier-macos-x64` |
 | macOS Apple Silicon | `pojia-modifier-macos-arm64-installer.command` | `pojia-modifier-macos-arm64` |
 
-在 [Actions](https://github.com/Mladery/pojia-modifier/actions/workflows/build.yml) 最新一次运行的 Artifacts 里下；tag 版本在 [Releases](https://github.com/Mladery/pojia-modifier/releases)。用法和脚本一致，把 `python pojia.py` 换成可执行文件即可；人格文件、`state/`、日志都跟着可执行文件走（安装版则在装目录里）。
+在 [Actions](https://github.com/zixuan203344/pojia-modifier/actions/workflows/build.yml) 最新一次运行的 Artifacts 里下；tag 版本在 [Releases](https://github.com/zixuan203344/pojia-modifier/releases)。用法和脚本一致，把 `python pojia.py` 换成可执行文件即可；人格文件、`state/`、日志都跟着可执行文件走（安装版则在装目录里）。
 
 三点先说：macOS 首次要 `xattr -d com.apple.quarantine`；Windows Defender 可能对单文件 exe 误报（要绝对干净就用源码跑，或用安装版——它不在临时目录里解包，误报少得多）；不带参数双击就进图形界面，想看命令行菜单加 `--menu`。
 
@@ -202,7 +215,7 @@ src/pojia.py                   命令行主程序（零第三方依赖）
 src/pojia_gui.py               图形界面：本机网页 UI，零依赖
 policy_src/                    策略明文：policy / overlay / hardening / echo / addenda
 tools/embed_policy.py          明文 → 嵌入常量（重跑必须字节一致）
-tools/selftest.py              20 个目标的自检
+tools/selftest.py              21 个目标的自检
 tools/                         打包与发布：PyInstaller、NSIS、POSIX 安装器、签名与验签
 vendor/everything/             Everything SDK 动态库（MIT），用于直查文件索引
 tests/contract/                26 条黑盒契约
@@ -236,7 +249,7 @@ python tools/embed_policy.py && git status --porcelain   # 必须为空
 
 ## 致谢
 
-[![贡献者](https://contrib.rocks/image?repo=Mladery/pojia-modifier)](https://github.com/Mladery/pojia-modifier/graphs/contributors)
+[![贡献者](https://contrib.rocks/image?repo=zixuan203344/pojia-modifier)](https://github.com/zixuan203344/pojia-modifier/graphs/contributors)
 
 按并入主线的时间排序，只列代码与文档改动。头像墙按提交记录自动更新，新名字出现即上榜。
 

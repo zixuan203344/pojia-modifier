@@ -5,7 +5,12 @@ const ACTIONS = __ACTIONS__;
 const IS_WIN = __ISWIN__;
 
 const selected = new Set(TARGETS.map(t => t[0]));
-const opts = {mode: "inject", gitBash: false};
+const opts = {mode: "inject", gitBash: false, ccguiOpen: false};
+const ccguiComponents = () => {
+  const plugin = $("ccgui-plugin").checked;
+  const persona = $("ccgui-persona").checked;
+  return plugin ? (persona ? "both" : "plugin") : (persona ? "persona" : "none");
+};
 
 const $ = id => document.getElementById(id);
 const chipsEl = $("chips"), actsEl = $("acts"), acts2El = $("acts2"), outEl = $("out");
@@ -33,7 +38,25 @@ TARGETS.forEach(([key, label]) => {
     b.setAttribute("aria-pressed", selected.has(key));
     sync();
   };
-  chipsEl.appendChild(b);
+  if (key === "ccgui"){
+    const wrap = document.createElement("div");
+    wrap.className = "row-options";
+    const options = document.createElement("button");
+    options.type = "button";
+    options.id = "ccgui-options";
+    options.className = "btn";
+    options.textContent = "选项";
+    options.setAttribute("aria-controls", "ccguiblock");
+    options.setAttribute("aria-expanded", "false");
+    options.onclick = () => {
+      opts.ccguiOpen = !opts.ccguiOpen;
+      sync();
+    };
+    wrap.append(b, options);
+    chipsEl.appendChild(wrap);
+  } else {
+    chipsEl.appendChild(b);
+  }
 });
 
 function sync(){
@@ -42,6 +65,8 @@ function sync(){
   /* 没勾 DSH 就整块收起来 —— 留着压暗的控件只会让人问「为什么点不动」 */
   $("dshblock").hidden = !on;
   optsEl.querySelectorAll("input").forEach(el => el.disabled = !on);
+  $("ccguiblock").hidden = !opts.ccguiOpen;
+  $("ccgui-options").setAttribute("aria-expanded", opts.ccguiOpen);
 
   const n = selected.size;
   if (!n){
@@ -67,15 +92,21 @@ function paintSummary(){
   $("s-row-shell").hidden = !dsh || !IS_WIN;
   $("s-shell").textContent = opts.gitBash
     ? "Git Bash（重启 DSH 后生效）" : "PowerShell（官方默认）";
+  $("s-row-ccgui").hidden = !selected.has("ccgui");
+  $("s-ccgui").textContent = ccguiSummary();
 }
+function ccguiSummary(){
+  return {both: "插件、安装人格", plugin: "插件", persona: "安装人格", none: "跳过"}[ccguiComponents()];
+}
+$("ccgui-plugin").onchange = $("ccgui-persona").onchange = paintSummary;
 $("all").onclick = () => {
   TARGETS.forEach(t => selected.add(t[0]));
-  [...chipsEl.children].forEach(c => c.setAttribute("aria-pressed", "true"));
+  chipsEl.querySelectorAll(".row").forEach(c => c.setAttribute("aria-pressed", "true"));
   sync();
 };
 $("none").onclick = () => {
   selected.clear();
-  [...chipsEl.children].forEach(c => c.setAttribute("aria-pressed", "false"));
+  chipsEl.querySelectorAll(".row").forEach(c => c.setAttribute("aria-pressed", "false"));
   sync();
 };
 
@@ -93,7 +124,7 @@ function paintScan(rows){
   const map = {};
   (rows || []).forEach(r => { if (r && r.key) map[r.key] = r; });
   scanMap = map;
-  [...chipsEl.children].forEach(row => {
+  chipsEl.querySelectorAll(".row").forEach(row => {
     const key = row.dataset.key;
     const el = row.querySelector(".st");
     if (!el) return;
@@ -216,6 +247,9 @@ function ask(action, name){
   if (selected.has("dsh") || !list.length){
     kv.push(`<div><span>DSH</span>${opts.mode === "preset" ? "只加一个模式（不改官方文件）" : "改配置文件（所有模式生效）"}</div>`);
     if (IS_WIN) kv.push(`<div><span>命令行</span>${opts.gitBash ? "改用 Git Bash（要重启 DSH）" : "保持 PowerShell"}</div>`);
+  }
+  if (selected.has("ccgui") || !list.length){
+    kv.push(`<div><span>CC GUI</span>${ccguiSummary()}</div>`);
   }
   kv.push(`<div><span>反悔</span>用「还原成原版」逐字节恢复</div>`);
   $("m-kv").innerHTML = kv.join("");
@@ -391,7 +425,8 @@ async function run(action){
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         action, targets: [...selected], confirm: true,
-        dsh_mode: opts.mode, git_bash: opts.gitBash
+        dsh_mode: opts.mode, git_bash: opts.gitBash,
+        ccgui_components: ccguiComponents()
       })
     });
     if (!res.ok || !res.body){

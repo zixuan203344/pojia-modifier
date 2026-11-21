@@ -95,7 +95,7 @@ def test_block_echo_survives_and_carries_current_version(box):
     body = _text(path)
     ver = _version(box)
     assert "破甲已生效｜版本%s｜" % ver in body, "块里的自证串版本不对：%s" % body[-400:]
-    assert "github.com/Mladery/pojia-modifier" in body
+    assert "github.com/zixuan203344/pojia-modifier" in body
     # 主块与镜像块都还在
     assert body.count("<!-- POJIA-NEXT-INJECT:BEGIN -->") == 1
     assert body.count("<!-- POJIA-MODIFIER-MIRROR:BEGIN -->") == 1

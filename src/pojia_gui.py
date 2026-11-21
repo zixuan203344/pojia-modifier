@@ -50,7 +50,7 @@ else:
     CORE = os.path.join(HERE, "pojia.py")
 IS_WIN = (os.name == "nt")
 TOKEN = secrets.token_urlsafe(18)
-REPO_NAME = "Mladery/pojia-modifier"
+REPO_NAME = "zixuan203344/pojia-modifier"
 REPO_URL = "https://github.com/" + REPO_NAME
 _VER_CACHE = []
 
@@ -314,6 +314,7 @@ REGISTRY = [
     ("reasonix", "Reasonix"),
     ("traecn", "Trae CN"),
     ("qodercn", "Qoder CN"),
+    ("ccgui", "CC GUI"),
 ]
 
 ACTIONS = [
@@ -337,11 +338,13 @@ def pick_options(payload):
     return (mode if mode in DSH_MODES else "inject"), bool(payload.get("git_bash"))
 
 
-def build_cmd(action, targets, dsh_mode="inject", git_bash=False):
+def build_cmd(action, targets, dsh_mode="inject", git_bash=False, ccgui_components="both"):
     base = [sys.executable] if FROZEN else [sys.executable, "-u", CORE]
     t = ",".join(targets) if targets else "all"
 
     extra = []
+    if action in ("dryrun", "apply", "revert") and (not targets or "ccgui" in targets):
+        extra += ["--ccgui-components", ccgui_components]
     if action in ("dryrun", "apply") and (not targets or "dsh" in targets):
         m = (dsh_mode or "inject").strip().lower()
         extra += ["--dsh-mode", m if m in DSH_MODES else "inject"]
@@ -362,7 +365,7 @@ def build_cmd(action, targets, dsh_mode="inject", git_bash=False):
     if action == "apply":
         return base + ["--apply", "--yes", "--target", t] + extra
     if action == "revert":
-        return base + ["--revert", "--yes", "--target", t]
+        return base + ["--revert", "--yes", "--target", t] + extra
     if action == "snapshot":
         return base + ["--snapshot"]
     if action == "compare":
@@ -491,7 +494,10 @@ class Handler(BaseHTTPRequestHandler):
             targets = []
         targets = [t for t in targets if t in dict(REGISTRY)]
         dsh_mode, git_bash = pick_options(payload)
-        cmd = build_cmd(action, targets, dsh_mode, git_bash)
+        ccgui_components = payload.get("ccgui_components")
+        if ccgui_components not in ("plugin", "persona", "both", "none"):
+            ccgui_components = "both"
+        cmd = build_cmd(action, targets, dsh_mode, git_bash, ccgui_components)
         if not cmd:
             self.send_error(400, "bad action")
             return

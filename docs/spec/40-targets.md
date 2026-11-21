@@ -64,7 +64,7 @@
 
 ## 3. 目标清单
 
-以下为必须支持的 20 个目标。路径中的 `~` 表示用户主目录。
+以下为必须支持的 21 个目标。路径中的 `~` 表示用户主目录。
 
 > **路径的唯一权威是 `20-locate` 第 2 节的固定路径表。** 本节只列"形态"与"注意事项"，
 > 目录名与文件名的细节不在这里重复——两处都写必然漂移。
@@ -91,6 +91,7 @@
 | `reasonix` | Reasonix | `%APPDATA%/reasonix` | `AGENTS.md` | 标记块 |
 | `traecn` | Trae CN | `~/.trae-cn` | `user_rules/pojia.md` | 标记块 |
 | `qodercn` | Qoder CN | `~/.qoder-cn` | `agents/purge/qodercn.md` | 标记块（frontmatter 在块之前） |
+| `ccgui` | CC GUI | `~/.ccgui-next` | `plugins/pojia-modifier/` + `plugins.json` | 本地插件直装 + 人格 |
 
 ### 3.1 各目标的定位要点
 
@@ -109,6 +110,22 @@
 | `reasonix` | `REASONIX_HOME` / `REASONIX_STATE_HOME` | `Reasonix Studio.exe` / `reasonix` / `reasonix-studio-host.exe` | 主目录在 `%APPDATA%\reasonix`，`~\.reasonix` 只是锁目录；分层加载 `AGENTS.md` → 祖先链 → 项目 → `*.local.md` |
 | `traecn` | `TRAE_CN_HOME` | `Trae CN.exe` | 1.107.0 起全局层只读 `user_rules.md`（legacy）与 `user_rules/` 目录递归，不再读 `~/.trae-cn/rules/`；项目规则在 `<workspace>/.trae/rules/`。定位标记 `argv.json` 常驻（全新安装也有）；安装根与配置根不同位，进程反推重写为「进程命中 → 回默认配置根」 |
 | `qodercn` | `QODER_CONFIG_DIR` / `QODER_HOME` | `Qoder.exe` | 本地没有可替换的政策块（政策在服务端），靠 agent + skill 两层行为契约；`skills/purge/SKILL.md` 是主文件之外的附带落点，撤回时一并摘除 |
+
+### 3.2 CC GUI 的插件直装与策略三处同源
+
+`ccgui` 不写标记块。勾选「插件」时直接写宿主的插件目录和注册表，等于替用户做完「从本地目录安装」这一步：`plugins/pojia-modifier/` 下放 `manifest.json`、`main.js`、`policy.md`，同时在 `plugins.json` 里登记 `plugins["pojia-modifier"]`。`policy_src/` 的完整策略有三处同源落点，内容逐字相同。
+
+| 落点 | 通道 | 要点 |
+|---|---|---|
+| `plugins/pojia-modifier/policy.md` | 随插件安装 | 可读可 diff，随 `--revert` 删除 |
+| `main.js` 的 `POLICY` | 每轮贡献 | 切 3 块，每轮登记 1 块 `persistence=session`，宿主后续重放全部块 |
+| `bots/<ID>/SOUL.md` | 宿主直接加载 | 人格正文；`AGENTS.md` 放工程纪律 |
+
+`plugins.json` 的条目按宿主 `PluginRecord` 的七个字段写：`version`、`enabled`、`source=local`、`permissions=["runtime.events.read", "prompt.contribute.internal"]`、`quarantined`、`lastError`、`installedAt`（秒）。读-改-写只动自己那一个键，其它插件与 `kvTombstones` 等顶层键保留；已存在的条目沿用 `enabled` / `installedAt`，按宿主 `install_from` 的语义重置 `quarantined` / `lastError` 并摘掉本插件的 KV 墓碑（撤回时按快照补回）。撤回以安装前的 `plugins.json.pojia.bak` 为基底，把当前表里除自己以外的条目并回去，宿主后来新装的插件不会丢。`registerTurnHooks` 需同时声明 `runtime.events.read` 与 `prompt.contribute.internal`，缺前者会被宿主拒绝调用。
+
+前端 `collectBeforeTurnContributions` 的 `DEFAULT_PROMPT_CONTRIBUTION_MAX_BYTES = 12 * 1024` 是**每轮累计**预算，不是每条；`usedBytes` 遍历所有插件的本轮贡献，超了整条 `continue`。所以不在一轮里塞 3 块政策：`main.js` 用 `persistence: "session"` 每轮只登记 1 块，`onAccepted` 推进游标；宿主把已确认的块存进 `sessionContributions` 并在后续轮次重放，重放发生在预算检查之后。新会话按 `engine/sessionId` 重新从块 0 登记。
+
+`--status` 比对三个文件加注册条目；人格另用 `bot.json` 的 `managedHash` 区分「策略升级」与「用户手改」：指纹吻合才重写到新版，否则保留原文件并报错。旧版导出到 `.pojia/ccgui-bundle/` 的包由 `ccgui_drop_legacy_bundle()` 在下次安装或撤回时清理。
 
 ---
 
@@ -243,7 +260,7 @@ ZCode 的系统提示词嵌在 `zcode.cjs` 里，是一个 JS 字符串常量。
 
 ## 8. 验收要点
 
-- 20 个目标逐个跑"注入 → 再注入 → 撤回"，字节级一致。
+- 21 个目标逐个跑"应用 → 再应用 → 撤回"，字节级一致。
 - 目标目录不存在时，注入能自建，撤回能删干净（不留空目录）。
 - DSH 解包后，注入点文件存在且被正确改写；还原后解包目录被清除。
 - DSH 会话守卫：`--apply` 后每个 profile 的 `node_modules/pojia-session-guard/` 齐两个

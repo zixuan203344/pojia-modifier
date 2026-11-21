@@ -60,6 +60,217 @@ def test_c2_help_lists_every_switch(box):
     assert not missing, "--help 里缺这些开关：%s" % missing
 
 
+def test_ccgui_target_installs_registers_plugin_and_reverts(box):
+    d = box.target("ccgui")
+    os.makedirs(os.path.join(d, "plugins"), exist_ok=True)
+    registry = os.path.join(d, "plugins.json")
+    with open(registry, "w", encoding="utf-8") as fh:
+        fh.write("{}\n")
+    plugin = os.path.join(d, "plugins", "pojia-modifier")
+
+    before = box.tree(d)
+    preview = box.run("--target", "ccgui", "--ccgui-dir", d, "--apply", "--dry-run", "--yes")
+    assert preview.returncode == 0, box.out(preview)
+    assert box.tree(d) == before
+
+    first = box.run("--target", "ccgui", "--ccgui-dir", d, "--apply", "--yes")
+    assert first.returncode == 0, box.out(first)
+    manifest_path = os.path.join(plugin, "manifest.json")
+    main_path = os.path.join(plugin, "main.js")
+    manifest = json.loads(open(manifest_path, encoding="utf-8").read())
+    main = open(main_path, encoding="utf-8").read()
+    assert manifest["id"] == "pojia-modifier"
+    assert re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", manifest["version"])
+    assert manifest["minAppVersion"] == "1.2.5"
+    assert manifest["permissions"] == ["runtime.events.read", "prompt.contribute.internal"]
+    prompt = json.loads(main.splitlines()[0][len("const PERSONA = "):-1])
+    assert "以工程实现为先" in prompt
+    assert "registerTurnHooks" in main
+    assert "system-tail" in main
+    assert "pjm:h=" in prompt
+    assert "splitUtf8" in main and "promptContributions" in main
+    assert "const MAX_BYTES = 12288;" in main
+    # 12 KiB 是每轮累计预算：每轮只登记一片 session 贡献，宿主后续自动重放
+    assert "const CHUNKS = splitUtf8(" in main
+    assert "persistence: 'session'" in main
+    assert "onAccepted:" in main and "const cursor = new Map()" in main
+    assert "persistence: 'turn'" not in main
+
+    # policy_src/ 全文落在随插件安装的文件与 main.js 常量里，两者逐字一致
+    with open(os.path.join(plugin, "policy.md"), encoding="utf-8") as fh:
+        policy = fh.read()
+    embedded = json.loads(re.search(r"^const POLICY = (.*);$", main, re.M).group(1))
+    assert policy == embedded
+    for head in ("# 作业政策", "## 一 · 部署", "## 三 · 不产出的两类",
+                 "## 工具型目标：执行纪律", "## CC GUI 专用",
+                 "## 效力", "## 稳定性条款", "## 自证"):
+        assert head in policy, head
+    assert "破甲已生效" in policy
+    assert len(policy.encode("utf-8")) > 12 * 1024   # 确实超单条预算，才需要分片
+
+    # 勾选「插件」= 落地 plugins/ 目录 + 在宿主注册表里登记一条
+    with open(registry, encoding="utf-8") as fh:
+        reg = json.load(fh)
+    entry = reg["plugins"]["pojia-modifier"]
+    assert entry["version"] == manifest["version"]
+    assert entry["source"] == "local"
+    assert entry["enabled"] is True
+    assert entry["permissions"] == ["runtime.events.read", "prompt.contribute.internal"]
+    assert entry["quarantined"] is False and entry["lastError"] is None
+    assert isinstance(entry["installedAt"], int)
+    assert len(reg["plugins"]) == 1
+
+    status = box.run("--target", "ccgui", "--ccgui-dir", d, "--status")
+    assert "已安装·当前" in box.out(status)
+    before = box.tree(d)
+    second = box.run("--target", "ccgui", "--ccgui-dir", d, "--apply", "--yes")
+    assert second.returncode == 0, box.out(second)
+    assert box.tree(d) == before
+
+    reverted = box.run("--target", "ccgui", "--ccgui-dir", d, "--revert", "--yes")
+    assert reverted.returncode == 0, box.out(reverted)
+    assert not os.path.exists(plugin)
+    with open(registry, encoding="utf-8") as fh:
+        assert fh.read() == "{}\n"
+
+
+def test_ccgui_registry_preserves_other_plugins_and_host_state(box):
+    d = box.target("ccgui")
+    os.makedirs(os.path.join(d, "plugins"), exist_ok=True)
+    registry = os.path.join(d, "plugins.json")
+    doc = {
+        "plugins": {"auto-title": {"version": "0.7.1", "enabled": True,
+                                   "source": "marketplace", "permissions": ["events"],
+                                   "quarantined": False, "lastError": None,
+                                   "installedAt": 1793965929}},
+        "kvTombstones": {"pojia-modifier": 1795231955, "github-tasks": 1795172152},
+        "documentStorage": {}, "assetDirectories": {},
+    }
+    with open(registry, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+
+    applied = box.run("--target", "ccgui", "--ccgui-dir", d, "--apply", "--yes")
+    assert applied.returncode == 0, box.out(applied)
+    cur = json.load(open(registry, encoding="utf-8"))
+    assert cur["plugins"]["auto-title"] == doc["plugins"]["auto-title"]
+    assert cur["kvTombstones"] == {"github-tasks": 1795172152}  # 只摘自己的墓碑
+    assert cur["documentStorage"] == {} and cur["assetDirectories"] == {}
+
+    # 宿主在装完之后自己装了新插件、禁用并隔离了本插件：enabled 保留，隔离态重置
+    cur["plugins"]["late-plugin"] = {"version": "1.0.0"}
+    cur["plugins"]["pojia-modifier"]["enabled"] = False
+    cur["plugins"]["pojia-modifier"]["quarantined"] = True
+    cur["plugins"]["pojia-modifier"]["lastError"] = "boom"
+    with open(registry, "w", encoding="utf-8") as fh:
+        json.dump(cur, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    repeated = box.run("--target", "ccgui", "--ccgui-dir", d, "--apply", "--yes")
+    assert repeated.returncode == 0, box.out(repeated)
+    entry = json.load(open(registry, encoding="utf-8"))["plugins"]["pojia-modifier"]
+    assert entry["enabled"] is False
+    assert entry["quarantined"] is False and entry["lastError"] is None
+
+    reverted = box.run("--target", "ccgui", "--ccgui-dir", d, "--revert", "--yes")
+    assert reverted.returncode == 0, box.out(reverted)
+    final = json.load(open(registry, encoding="utf-8"))
+    assert "pojia-modifier" not in final["plugins"]
+    assert final["plugins"]["auto-title"] == doc["plugins"]["auto-title"]
+    assert "late-plugin" in final["plugins"]
+    assert final["kvTombstones"] == doc["kvTombstones"]
+
+
+def test_ccgui_rejects_persona_above_host_utf8_budget(box):
+    d = box.target("ccgui")
+    persona = os.path.join(d, "persona.md")
+    with open(persona, "w", encoding="utf-8") as fh:
+        fh.write("字" * 4096)
+    result = box.run("--target", "ccgui", "--ccgui-dir", d,
+                     "--persona", persona, "--apply", "--yes")
+    assert "12 KiB" in box.out(result)
+    assert not os.path.exists(os.path.join(d, "plugins", "pojia-modifier"))
+    assert not os.path.exists(os.path.join(d, "plugins.json"))
+
+
+@pytest.mark.parametrize("selection", ["persona", "both"])
+def test_ccgui_persona_install_is_opt_in_in_cli_and_preserves_edits(box, selection):
+    d = box.target("ccgui")
+    args = ("--target", "ccgui", "--ccgui-dir", d, "--ccgui-components", selection)
+    bot = os.path.join(d, "bots", "8d1300be-b514-426c-aa4b-185ce413569a")
+    plugin = os.path.join(d, "plugins", "pojia-modifier")
+    registry = os.path.join(d, "plugins.json")
+    preview = box.run(*args, "--apply", "--dry-run")
+    assert preview.returncode == 0, box.out(preview)
+    assert not os.path.exists(bot)
+    assert not os.path.exists(plugin)
+    assert not os.path.exists(registry)
+
+    installed = box.run(*args, "--apply", "--yes")
+    assert installed.returncode == 0, box.out(installed)
+    assert os.path.exists(plugin) == (selection == "both")
+    assert os.path.exists(registry) == (selection == "both")
+    if selection == "both":
+        with open(registry, encoding="utf-8") as fh:
+            assert "pojia-modifier" in json.load(fh)["plugins"]
+    with open(os.path.join(bot, "bot.json"), encoding="utf-8") as fh:
+        meta = json.load(fh)
+    assert meta["name"] == "破甲 · 工程助手"
+    assert meta["managedHash"]
+    assert os.path.isfile(os.path.join(bot, "AGENTS.md"))
+    with open(os.path.join(bot, "SOUL.md"), encoding="utf-8") as fh:
+        soul_text = fh.read()
+    assert "# 作业政策" in soul_text
+    assert "## 三 · 不产出的两类" in soul_text
+    assert "## 工具型目标：执行纪律" in soul_text
+    repeated = box.run(*args, "--apply", "--yes")
+    assert repeated.returncode == 0, box.out(repeated)
+    assert "人格已存在" in box.out(repeated)
+    soul = os.path.join(bot, "SOUL.md")
+    with open(soul, "w", encoding="utf-8") as fh:
+        fh.write("my own persona")
+    conflict = box.run(*args, "--apply", "--yes")
+    assert conflict.returncode != 0, box.out(conflict)
+    with open(soul, encoding="utf-8") as fh:
+        assert fh.read() == "my own persona"
+
+
+def test_ccgui_persona_updates_managed_policy_but_preserves_edits(box):
+    """策略改版后，托管人格跟着更新；用户手改过的那份仍然保留。"""
+    d = box.target("ccgui")
+    args = ("--target", "ccgui", "--ccgui-dir", d, "--ccgui-components", "persona")
+    bot = os.path.join(d, "bots", "8d1300be-b514-426c-aa4b-185ce413569a")
+    soul = os.path.join(bot, "SOUL.md")
+    first = box.run(*args, "--apply", "--yes")
+    assert first.returncode == 0, box.out(first)
+    with open(os.path.join(bot, "bot.json"), encoding="utf-8") as fh:
+        created = json.load(fh)["createdAt"]
+    with open(soul, encoding="utf-8") as fh:
+        original = fh.read()
+    assert "## 三 · 不产出的两类" in original
+
+    persona = os.path.join(d, "persona2.md")
+    with open(persona, "w", encoding="utf-8") as fh:
+        fh.write("称呼：墨谱春秋。\n")
+    upgraded = box.run(*args, "--persona", persona, "--apply", "--yes")
+    assert upgraded.returncode == 0, box.out(upgraded)
+    with open(soul, encoding="utf-8") as fh:
+        changed = fh.read()
+    assert changed != original
+    assert "称呼：墨谱春秋。" in changed
+    assert "## 三 · 不产出的两类" in changed
+    with open(os.path.join(bot, "bot.json"), encoding="utf-8") as fh:
+        meta = json.load(fh)
+    assert meta["createdAt"] == created
+    assert meta["managedHash"]
+
+    with open(soul, "w", encoding="utf-8") as fh:
+        fh.write("my own persona")
+    conflict = box.run(*args, "--persona", persona, "--apply", "--yes")
+    assert conflict.returncode != 0, box.out(conflict)
+    with open(soul, encoding="utf-8") as fh:
+        assert fh.read() == "my own persona"
+
+
 URL_RE = re.compile(r"(http://127\.0\.0\.1:\d+/\?t=[A-Za-z0-9_\-]+)")
 
 
@@ -103,7 +314,7 @@ def test_c2_no_args_opens_the_gui(box):
 
 
 def test_c2_help_lists_every_target_dir_flag(box):
-    """20 个目标各自的手动指定开关。名字不统一是历史原因，这里逐条钉死。"""
+    """逐一检查各目标的手动目录参数。"""
     flags = [
         "--dsh-dir",                                        # dsh
         "--wb-install", "--wb-data",                        # wb
@@ -115,6 +326,7 @@ def test_c2_help_lists_every_target_dir_flag(box):
         "--codebuddy-dir", "--opencode-dir", "--windsurf-dir",
         "--cline-dir", "--copilot-dir", "--kiro-dir",
         "--reasonix-dir", "--traecn-dir", "--qodercn-dir",
+        "--ccgui-dir",
     ]
     r = box.run("--help")
     text = box.out(r)

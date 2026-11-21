@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """逐目标往返自检（不属于交付物，只用来证明行为等价）。
 
-对 20 个目标各造一个假安装，跑：
+对 21 个目标各造一个假安装，跑：
     注入 -> 再注入（必须字节不变）-> 撤回（必须字节回到原样）
 
 只比字节，不看内部结构。
@@ -26,7 +26,11 @@ FAIL = []
 def tree(top, skip_suffix=(".pojia.bak", ".dshpurge.bak", ".unlockbak", ".unlockbak-ai")):
     out = {}
     for base, dirs, files in os.walk(top):
-        dirs[:] = [d for d in dirs if d not in ("__pycache__", ".pojia")]
+        if os.path.basename(base) == ".pojia":
+            # 护照、备份、日志都在管理目录内；插件已直装到 plugins/，不计入对比。
+            dirs[:] = []
+            continue
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
         for f in files:
             if f.endswith(skip_suffix):
                 continue
@@ -173,6 +177,9 @@ def seed(root):
         d = os.path.join(root, key)
         write(os.path.join(d, rel), "user content for %s\r\n" % key)
         cases.append((key, ["--%s-dir" % key if key != "antigravity" else "--gemini-dir", d], d))
+    ccgui = os.path.join(root, "ccgui")
+    write(os.path.join(ccgui, "plugins.json"), "{}\n")
+    cases.append(("ccgui", ["--ccgui-dir", ccgui], ccgui))
     return cases
 
 
